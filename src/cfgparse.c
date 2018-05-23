@@ -744,6 +744,11 @@ int cfg_parse_global(const char *file, int linenum, char **args, int kwm)
 			goto out;
 		global.tune.options &= ~GTUNE_USE_KQUEUE;
 	}
+	else if (!strcmp(args[0], "noevports")) {
+		if (alertif_too_many_args(0, file, linenum, args, &err_code))
+			goto out;
+		global.tune.options &= ~GTUNE_USE_EVPORTS;
+	}
 	else if (!strcmp(args[0], "nopoll")) {
 		if (alertif_too_many_args(0, file, linenum, args, &err_code))
 			goto out;
@@ -1897,7 +1902,7 @@ int cfg_parse_global(const char *file, int linenum, char **args, int kwm)
 				}
 			}
 		}
-		
+
 		ha_alert("parsing [%s:%d] : unknown keyword '%s' in '%s' section\n", file, linenum, args[0], "global");
 		err_code |= ERR_ALERT | ERR_FATAL;
 	}
@@ -4883,7 +4888,7 @@ stats_error_parsing:
 					reqlen += strlen(args[4]);
 				else
 					reqlen += strlen("HTTP/1.0");
-		    
+
 				curproxy->check_req = malloc(reqlen);
 				curproxy->check_len = snprintf(curproxy->check_req, reqlen,
 							       "%s %s %s\r\n", args[2], args[3], *args[4]?args[4]:"HTTP/1.0");
@@ -5192,7 +5197,7 @@ stats_error_parsing:
 			int cur_arg;
 
 			/* insert x-forwarded-for field, but not for the IP address listed as an except.
-			 * set default options (ie: bitfield, header name, etc) 
+			 * set default options (ie: bitfield, header name, etc)
 			 */
 
 			curproxy->options |= PR_O_FWDFOR | PR_O_FF_ALWAYS;
@@ -6223,7 +6228,7 @@ stats_error_parsing:
 				goto out;
 
 			}
-	    
+
 			logsrv->level = 7; /* max syslog level = debug */
 			if (*(args[arg+3])) {
 				logsrv->level = get_log_level(args[arg+3]);
@@ -6292,7 +6297,7 @@ stats_error_parsing:
 			goto out;
 		}
 
-		/* we must first clear any optional default setting */	
+		/* we must first clear any optional default setting */
 		curproxy->conn_src.opts &= ~CO_SRC_TPROXY_MASK;
 		free(curproxy->conn_src.iface_name);
 		curproxy->conn_src.iface_name = NULL;
@@ -6663,7 +6668,7 @@ stats_error_parsing:
 			err_code |= ERR_ALERT | ERR_FATAL;
 			goto out;
 		}
-	
+
 		if ((strcmp(args[2], "if") == 0 || strcmp(args[2], "unless") == 0)) {
 			if ((cond = build_acl_cond(file, linenum, &curproxy->acl, curproxy, (const char **)args+2, &errmsg)) == NULL) {
 				ha_alert("parsing [%s:%d] : error detected while parsing a '%s' condition : %s.\n",

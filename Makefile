@@ -38,6 +38,7 @@
 #   USE_SLZ              : enable slz library instead of zlib (pick at most one).
 #   USE_CPU_AFFINITY     : enable pinning processes to CPU on Linux. Automatic.
 #   USE_TFO              : enable TCP fast open. Supported on Linux >= 3.7.
+#   USE_EVPORTS          : enable event ports on SunOS systems. Automatic.
 #   USE_NS               : enable network namespace support. Supported on Linux >= 2.6.24.
 #   USE_DL               : enable it if your system requires -ldl. Automatic on Linux.
 #   USE_DEVICEATLAS      : enable DeviceAtlas api.
@@ -310,7 +311,8 @@ ifeq ($(TARGET),solaris)
   # This is for Solaris 8
   # We also enable getaddrinfo() which works since solaris 8.
   USE_POLL       = implicit
-  TARGET_CFLAGS  = -fomit-frame-pointer -DFD_SETSIZE=65536 -D_REENTRANT -D_XOPEN_SOURCE=500 -D__EXTENSIONS__
+  USE_EVPORTS    = implicit
+  TARGET_CFLAGS  = -fno-omit-frame-pointer -DFD_SETSIZE=65536 -D_REENTRANT -D_XOPEN_SOURCE=500 -D__EXTENSIONS__
   TARGET_LDFLAGS = -lnsl -lsocket
   USE_TPROXY     = implicit
   USE_LIBCRYPT    = implicit
@@ -364,7 +366,7 @@ ifeq ($(TARGET),aix52)
 else
 ifeq ($(TARGET),cygwin)
   # This is for Cygwin
-  # Cygwin adds IPv6 support only in version 1.7 (in beta right now). 
+  # Cygwin adds IPv6 support only in version 1.7 (in beta right now).
   USE_POLL   = implicit
   USE_TPROXY = implicit
   TARGET_CFLAGS  = $(if $(filter 1.5.%, $(shell uname -r)), -DUSE_IPV6 -DAF_INET6=23 -DINET6_ADDRSTRLEN=46, )
@@ -447,7 +449,7 @@ OPTIONS_OBJS    =
 BUILD_OPTIONS =
 
 # Return USE_xxx=$(USE_xxx) unless $(USE_xxx) = "implicit"
-# Usage: 
+# Usage:
 #   BUILD_OPTIONS += $(call ignore_implicit,USE_xxx)
 ignore_implicit = $(patsubst %=implicit,,$(1)=$($(1)))
 
@@ -519,6 +521,12 @@ endif
 ifneq ($(USE_MY_EPOLL),)
 OPTIONS_CFLAGS += -DUSE_MY_EPOLL
 BUILD_OPTIONS  += $(call ignore_implicit,USE_MY_EPOLL)
+endif
+
+ifneq ($(USE_EVPORTS),)
+OPTIONS_CFLAGS += -DENABLE_EVPORTS
+OPTIONS_OBJS   += src/ev_evports.o
+BUILD_OPTIONS  += $(call ignore_implicit,USE_EVPORTS)
 endif
 
 ifneq ($(USE_KQUEUE),)

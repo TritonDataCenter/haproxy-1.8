@@ -58,15 +58,16 @@
 #define GTUNE_USE_POLL           (1<<1)
 #define GTUNE_USE_EPOLL          (1<<2)
 #define GTUNE_USE_KQUEUE         (1<<3)
+#define GTUNE_USE_EVPORTS        (1<<4)
 /* platform-specific options */
-#define GTUNE_USE_SPLICE         (1<<4)
-#define GTUNE_USE_GAI            (1<<5)
-#define GTUNE_USE_REUSEPORT      (1<<6)
-#define GTUNE_RESOLVE_DONTFAIL   (1<<7)
+#define GTUNE_USE_SPLICE         (1<<5)
+#define GTUNE_USE_GAI            (1<<6)
+#define GTUNE_USE_REUSEPORT      (1<<7)
+#define GTUNE_RESOLVE_DONTFAIL   (1<<8)
 
-#define GTUNE_SOCKET_TRANSFER	 (1<<8)
-#define GTUNE_NOEXIT_ONFAILURE   (1<<9)
-#define GTUNE_USE_SYSTEMD        (1<<10)
+#define GTUNE_SOCKET_TRANSFER    (1<<9)
+#define GTUNE_NOEXIT_ONFAILURE   (1<<10)
+#define GTUNE_USE_SYSTEMD        (1<<11)
 
 /* Access level for a stats socket */
 #define ACCESS_LVL_NONE     0
