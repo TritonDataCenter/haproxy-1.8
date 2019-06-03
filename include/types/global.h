@@ -3,6 +3,7 @@
  * Global variables.
  *
  * Copyright (C) 2000-2012 Willy Tarreau - w@1wt.eu
+ * Copyright 2019 Joyent, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -68,6 +69,8 @@
 #define GTUNE_NOEXIT_ONFAILURE   (1<<9)
 #define GTUNE_USE_SYSTEMD        (1<<10)
 
+#define GTUNE_USE_EVPORTS        (1<<11)
+
 /* Access level for a stats socket */
 #define ACCESS_LVL_NONE     0
 #define ACCESS_LVL_USER     1
@@ -91,6 +94,7 @@ struct global {
 	int nbproc;
 	int nbthread;
 	unsigned int hard_stop_after;	/* maximum time allowed to perform a soft-stop */
+	int max_old_workers;	/* max length of 'oldpids' */
 	int maxconn, hardmaxconn;
 	int maxsslconn;
 	int ssl_session_max_cost;   /* how many bytes an SSL session may cost */

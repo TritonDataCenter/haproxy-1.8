@@ -4,7 +4,7 @@
                          ----------------------
                               version 1.8
                              willy tarreau
-                              2019/04/25
+                              2019/06/19
 
 
 This document covers the configuration language as implemented in the version
@@ -568,6 +568,8 @@ The following keywords are supported in the "global" section :
    - log-tag
    - log-send-hostname
    - lua-load
+   - master-worker
+   - max-old-workers
    - nbproc
    - nbthread
    - node
@@ -613,6 +615,7 @@ The following keywords are supported in the "global" section :
    - maxzlibmem
    - noepoll
    - nokqueue
+   - noevports
    - nopoll
    - nosplice
    - nogetaddrinfo
@@ -911,6 +914,14 @@ master-worker [no-exit-on-failure]
   this behavior, you must use the keyword "no-exit-on-failure".
 
   See also "-W" in the management guide.
+
+max-old-workers <number>
+  In master-worker mode, the maximum number of old child processes permitted.
+  If this value is exceeded, the oldest child worker is sent SIGTERM to cause
+  it to quit immediately. This can be useful if hard-stop-after is not suitable
+  for cleaning up old workers with long-standing open connections, but a limit
+  on overall haproxy resource usage is still required. It must be at least as
+  high as "nbproc". Default is no limit.
 
 nbproc <number>
   Creates <number> processes when going daemon. This requires the "daemon"
@@ -1376,11 +1387,18 @@ nokqueue
   equivalent to the command-line argument "-dk". The next polling system
   used will generally be "poll". See also "nopoll".
 
+noevports
+  Disables the use of the event ports event polling system on SunOS systems
+  derived from Solaris 10 and later. It is equivalent to the command-line
+  argument "-dv". The next polling system used will generally be "poll". See
+  also "nopoll".
+
 nopoll
   Disables the use of the "poll" event polling system. It is equivalent to the
   command-line argument "-dp". The next polling system used will be "select".
   It should never be needed to disable "poll" since it's available on all
-  platforms supported by HAProxy. See also "nokqueue" and "noepoll".
+  platforms supported by HAProxy. See also "nokqueue", "noepoll" and
+  "noevports".
 
 nosplice
   Disables the use of kernel tcp splicing between sockets on Linux. It is

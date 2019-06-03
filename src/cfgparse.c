@@ -2,6 +2,7 @@
  * Configuration parser
  *
  * Copyright 2000-2011 Willy Tarreau <w@1wt.eu>
+ * Copyright 2019 Joyent, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -733,6 +734,22 @@ int cfg_parse_global(const char *file, int linenum, char **args, int kwm)
 		}
 		global.mode |= MODE_MWORKER;
 	}
+	else if (!strcmp(args[0], "max-old-workers")) {
+		if (alertif_too_many_args(1, file, linenum, args, &err_code))
+			goto out;
+		if (*(args[1]) == 0) {
+			ha_alert("parsing [%s:%d] : '%s' expects an integer argument.\n", file, linenum, args[0]);
+			err_code |= ERR_ALERT | ERR_FATAL;
+			goto out;
+		}
+		global.max_old_workers = atol(args[1]);
+		if (global.max_old_workers < 1 || global.max_old_workers > LONGBITS) {
+			ha_alert("parsing [%s:%d] : '%s' must be between 1 and %d (was %d).\n",
+			         file, linenum, args[0], LONGBITS, global.max_old_workers);
+			err_code |= ERR_ALERT | ERR_FATAL;
+			goto out;
+		}
+	}
 	else if (!strcmp(args[0], "debug")) {
 		if (alertif_too_many_args(0, file, linenum, args, &err_code))
 			goto out;
@@ -747,6 +764,11 @@ int cfg_parse_global(const char *file, int linenum, char **args, int kwm)
 		if (alertif_too_many_args(0, file, linenum, args, &err_code))
 			goto out;
 		global.tune.options &= ~GTUNE_USE_KQUEUE;
+	}
+	else if (!strcmp(args[0], "noevports")) {
+		if (alertif_too_many_args(0, file, linenum, args, &err_code))
+			goto out;
+		global.tune.options &= ~GTUNE_USE_EVPORTS;
 	}
 	else if (!strcmp(args[0], "nopoll")) {
 		if (alertif_too_many_args(0, file, linenum, args, &err_code))
@@ -1893,13 +1915,33 @@ int cfg_parse_global(const char *file, int linenum, char **args, int kwm)
 				}
 			}
 		}
-		
+
 		ha_alert("parsing [%s:%d] : unknown keyword '%s' in '%s' section\n", file, linenum, args[0], "global");
 		err_code |= ERR_ALERT | ERR_FATAL;
 	}
 
  out:
 	free(errmsg);
+	return err_code;
+}
+
+int cfg_post_parse_section_global(void)
+{
+	int err_code = 0;
+
+	if (global.max_old_workers > 0) {
+		if (!(global.mode & MODE_MWORKER)) {
+			ha_alert("max-old-workers can only be set in master-worker mode\n");
+			err_code |= ERR_FATAL | ERR_ALERT;
+		}
+
+		if (global.max_old_workers < global.nbproc) {
+			ha_alert("max-old-workers=%d is less than nbproc=%d\n",
+			         global.max_old_workers, global.nbproc);
+			err_code |= ERR_FATAL | ERR_ALERT;
+		}
+	}
+
 	return err_code;
 }
 
@@ -9369,7 +9411,8 @@ static void cfgparse_init(void)
 	cfg_register_section("frontend",       cfg_parse_listen,    NULL);
 	cfg_register_section("backend",        cfg_parse_listen,    NULL);
 	cfg_register_section("defaults",       cfg_parse_listen,    NULL);
-	cfg_register_section("global",         cfg_parse_global,    NULL);
+	cfg_register_section("global",         cfg_parse_global,
+			     cfg_post_parse_section_global);
 	cfg_register_section("userlist",       cfg_parse_users,     NULL);
 	cfg_register_section("peers",          cfg_parse_peers,     NULL);
 	cfg_register_section("mailers",        cfg_parse_mailers,   NULL);

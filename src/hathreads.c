@@ -10,6 +10,7 @@
  *
  */
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -20,12 +21,13 @@
 #include <proto/fd.h>
 
 
-/* Dummy I/O handler used by the sync pipe.*/
+#ifndef USE_THREAD
+
 void thread_sync_io_handler(int fd)
 {
 }
 
-#ifdef USE_THREAD
+#else
 
 static HA_SPINLOCK_T sync_lock;
 static int           threads_sync_pipe[2] = {-1, -1};
@@ -40,6 +42,32 @@ THREAD_LOCAL unsigned long tid_bit       = (1UL << 0);
 #if defined(DEBUG_THREAD) || defined(DEBUG_FULL)
 struct lock_stat lock_stats[LOCK_LABELS];
 #endif
+
+/*
+ * Dummy I/O handler used by the sync pipe.
+ *
+ * This does nothing upstream, as indeed it should: the acknowledgement end of
+ * writing to the sync pipe is via thread_exit_sync().
+ *
+ * However, we have a pfiles(1) workaround: if somebody happens to run it on the
+ * haproxy process, as a side-effect threads_sync_pipe[0] will appear in
+ * the poller with POLLIN. However, this code is not expecting such spurious
+ * wake-ups, and we will end up in a busy loop as the fd is never cleared from
+ * fd_cache (and run_poll_loop() will force immediate timeouts as a result).
+ *
+ * As our deployment in the loadbalancer zone is single-threaded, we'll actively
+ * presume this is the case, in which case we know we can ignore it as spurious.
+ */
+void thread_sync_io_handler(int fd)
+{
+	assert(!(all_threads_mask & (all_threads_mask - 1)));
+	assert(fd == threads_sync_pipe[0]);
+
+	send_log(NULL, LOG_INFO, "%s: ignoring spurious wake-up on "
+	    "threads_sync_pipe[0]: were we a victim of pfiles(1) ?\n",
+	    __func__);
+	fd_done_recv(fd);
+}
 
 /* Initializes the sync point. It creates a pipe used by threads to wake up all
  * others when a sync is requested. It also initializes the mask of all created

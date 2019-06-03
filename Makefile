@@ -8,6 +8,7 @@
 #   USE_DLMALLOC         : enable use of dlmalloc (see DLMALLOC_SRC)
 #   USE_EPOLL            : enable epoll() on Linux 2.6. Automatic.
 #   USE_KQUEUE           : enable kqueue() on BSD. Automatic.
+#   USE_EVPORTS          : enable event ports on SunOS systems. Automatic.
 #   USE_MY_EPOLL         : redefine epoll_* syscalls. Automatic.
 #   USE_MY_SPLICE        : redefine the splice syscall if build fails without.
 #   USE_NETFILTER        : enable netfilter on Linux. Automatic.
@@ -323,6 +324,7 @@ ifeq ($(TARGET),solaris)
   USE_CRYPT_H     = implicit
   USE_GETADDRINFO = implicit
   USE_THREAD      = implicit
+  USE_EVPORTS     = implicit
 else
 ifeq ($(TARGET),freebsd)
   # This is for FreeBSD
@@ -532,6 +534,12 @@ ifneq ($(USE_KQUEUE),)
 OPTIONS_CFLAGS += -DENABLE_KQUEUE
 OPTIONS_OBJS   += src/ev_kqueue.o
 BUILD_OPTIONS  += $(call ignore_implicit,USE_KQUEUE)
+endif
+
+ifneq ($(USE_EVPORTS),)
+OPTIONS_CFLAGS += -DENABLE_EVPORTS
+OPTIONS_OBJS   += src/ev_evports.o
+BUILD_OPTIONS  += $(call ignore_implicit,USE_EVPORTS)
 endif
 
 ifneq ($(USE_VSYSCALL),)

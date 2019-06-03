@@ -1,6 +1,7 @@
 /*
  * HA-Proxy : High Availability-enabled HTTP/TCP proxy
  * Copyright 2000-2019 Willy Tarreau <willy@haproxy.org>.
+ * Copyright 2019 Joyent, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -180,6 +181,7 @@ int jobs = 0;   /* number of active jobs (conns, listeners, active tasks, ...) *
 #define MAX_START_RETRIES	200
 static int *oldpids = NULL;
 static int oldpids_sig; /* use USR1 or TERM */
+static void delete_oldpid(int);
 
 /* Path to the unix socket we use to retrieve listener sockets from the old process */
 static const char *old_unixsocket;
@@ -426,6 +428,9 @@ static void usage(char *name)
 #if defined(ENABLE_KQUEUE)
 		"        -dk disables kqueue() usage even when available\n"
 #endif
+#if defined(ENABLE_EVPORTS)
+		"        -dv disables event ports usage even when available\n"
+#endif
 #if defined(ENABLE_POLL)
 		"        -dp disables poll() usage even when available\n"
 #endif
@@ -453,17 +458,31 @@ static void usage(char *name)
 /*   more specific functions   ***************************************/
 /*********************************************************************/
 
-/* sends the signal <sig> to all pids found in <oldpids>. Returns the number of
- * pids the signal was correctly delivered to.
+/*
+ * Sends the signal <sig> to all pids found in <oldpids>, returning 1 if we
+ * signaled at least one child.
  */
 static int tell_old_pids(int sig)
 {
+	int signaled = 0;
 	int p;
-	int ret = 0;
-	for (p = 0; p < nb_oldpids; p++)
-		if (kill(oldpids[p], sig) == 0)
-			ret++;
-	return ret;
+
+	for (p = 0; p < nb_oldpids;) {
+		if (kill(oldpids[p], sig) == 0) {
+			signaled++;
+		} else if (errno == ESRCH) {
+			/* pid went away: remove it from our list. */
+			delete_oldpid(oldpids[p]);
+			continue;
+		} else {
+			ha_warning("Failed to signal worker %d: %s.\n",
+			           (int)oldpids[p], strerror(errno));
+		}
+
+		p++;
+	}
+
+	return (signaled > 0);
 }
 
 /* return 1 if a pid is a current child otherwise 0 */
@@ -593,23 +612,22 @@ static void mworker_cleanlisteners()
 
 
 /*
- * remove a pid forom the olpid array and decrease nb_oldpids
- * return 1 pid was found otherwise return 0
+ * Remove a pid from the olpid array and decrease nb_oldpids. List is kept in
+ * newest-first order for the benefit of max-old-workers.
  */
-
-int delete_oldpid(int pid)
+static void delete_oldpid(int pid)
 {
 	int i;
 
 	for (i = 0; i < nb_oldpids; i++) {
 		if (oldpids[i] == pid) {
-			oldpids[i] = oldpids[nb_oldpids - 1];
-			oldpids[nb_oldpids - 1] = 0;
+			oldpids[i++] = 0;
+			for (; i < nb_oldpids; i++)
+				oldpids[i - 1] = oldpids[i];
 			nb_oldpids--;
-			return 1;
+			return;
 		}
 	}
-	return 0;
 }
 
 
@@ -1340,6 +1358,9 @@ static void init(int argc, char **argv)
 #if defined(ENABLE_KQUEUE)
 	global.tune.options |= GTUNE_USE_KQUEUE;
 #endif
+#if defined(ENABLE_EVPORTS)
+	global.tune.options |= GTUNE_USE_EVPORTS;
+#endif
 #if defined(CONFIG_HAP_LINUX_SPLICE)
 	global.tune.options |= GTUNE_USE_SPLICE;
 #endif
@@ -1383,6 +1404,10 @@ static void init(int argc, char **argv)
 #if defined(ENABLE_KQUEUE)
 			else if (*flag == 'd' && flag[1] == 'k')
 				global.tune.options &= ~GTUNE_USE_KQUEUE;
+#endif
+#if defined(ENABLE_EVPORTS)
+			else if (*flag == 'd' && flag[1] == 'v')
+				global.tune.options &= ~GTUNE_USE_EVPORTS;
 #endif
 #if defined(CONFIG_HAP_LINUX_SPLICE)
 			else if (*flag == 'd' && flag[1] == 'S')
@@ -1910,6 +1935,9 @@ static void init(int argc, char **argv)
 
 	if (!(global.tune.options & GTUNE_USE_KQUEUE))
 		disable_poller("kqueue");
+
+	if (!(global.tune.options & GTUNE_USE_EVPORTS))
+		disable_poller("evports");
 
 	if (!(global.tune.options & GTUNE_USE_EPOLL))
 		disable_poller("epoll");
@@ -2611,7 +2639,7 @@ int main(int argc, char **argv)
 		 * simply send SIGUSR1, which will not be undoable.
 		 */
 		if (tell_old_pids(SIGTTOU) == 0) {
-			/* no need to wait if we can't contact old pids */
+			/* no need to wait if we can't contact any old pids */
 			retry = 0;
 			continue;
 		}
@@ -2725,8 +2753,22 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (nb_oldpids)
-		nb_oldpids = tell_old_pids(oldpids_sig);
+	if (nb_oldpids) {
+		tell_old_pids(oldpids_sig);
+
+		if (oldpids_sig != SIGTERM && global.max_old_workers > 0) {
+			while (nb_oldpids > global.max_old_workers) {
+				pid_t pid = oldpids[nb_oldpids - 1];
+
+				if (kill(pid, SIGTERM) != 0 && errno != ESRCH) {
+					ha_warning("[%s.main()] Failed to kill old worker %d: %s.\n",
+					           argv[0], (int)pid, strerror(errno));
+				}
+
+				delete_oldpid(pid);
+			}
+		}
+	}
 
 	if ((getenv("HAPROXY_MWORKER_REEXEC") == NULL)) {
 		nb_oldpids = 0;
