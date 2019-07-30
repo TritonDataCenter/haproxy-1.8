@@ -317,7 +317,7 @@ ifeq ($(TARGET),solaris)
   # This is for Solaris 8
   # We also enable getaddrinfo() which works since solaris 8.
   USE_POLL       = implicit
-  TARGET_CFLAGS  = -fomit-frame-pointer -DFD_SETSIZE=65536 -D_REENTRANT -D_XOPEN_SOURCE=500 -D__EXTENSIONS__
+  TARGET_CFLAGS  = -fno-omit-frame-pointer -DFD_SETSIZE=65536 -D_REENTRANT -D_XOPEN_SOURCE=500 -D__EXTENSIONS__ -D_XPG6
   TARGET_LDFLAGS = -lnsl -lsocket
   USE_TPROXY     = implicit
   USE_LIBCRYPT    = implicit
@@ -325,6 +325,8 @@ ifeq ($(TARGET),solaris)
   USE_GETADDRINFO = implicit
   USE_THREAD      = implicit
   USE_EVPORTS     = implicit
+  USE_OPENSSL     = 1
+  SSL_LIB         = /opt/local/lib
 else
 ifeq ($(TARGET),freebsd)
   # This is for FreeBSD
@@ -620,7 +622,7 @@ ifneq ($(USE_OPENSSL),)
 # in the usual path, use SSL_INC=/path/to/inc and SSL_LIB=/path/to/lib.
 BUILD_OPTIONS   += $(call ignore_implicit,USE_OPENSSL)
 OPTIONS_CFLAGS  += -DUSE_OPENSSL $(if $(SSL_INC),-I$(SSL_INC))
-OPTIONS_LDFLAGS += $(if $(SSL_LIB),-L$(SSL_LIB)) -lssl -lcrypto
+OPTIONS_LDFLAGS += $(if $(SSL_LIB),-L$(SSL_LIB) -R$(SSL_LIB)) -lssl -lcrypto
 ifneq ($(USE_DL),)
 OPTIONS_LDFLAGS += -ldl
 endif
